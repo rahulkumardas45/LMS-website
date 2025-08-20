@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Outfit:wght@100..900&display=swap');
+
+@import "tailwindcss";
+
+
+*{
+  font-family: outfit;
+  
+}
+
+@layer base{
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+::-webkit-scrollbar{
+  display: none;
+}
+
+@keyframes scrollX {
+  0% {
+    transform: translateX(0);
+  }
+  
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scrollX {
+  display: flex;
+  width: max-content;
+  animation: scrollX 20s linear infinite;
+}
