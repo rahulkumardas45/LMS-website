@@ -1,4 +1,4 @@
-import {webhook} from 'svix'
+import { Webhook } from 'svix'
 import User from './User.js'
 
 
@@ -6,7 +6,7 @@ import User from './User.js'
 
 export const clerkWebhooks = async (req, res)=>{
     try {
-        const whook = new webhook(process.env.CLERK_WEBHOOK_SECRET)
+        const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET)
         
         await whook.verify(JSON.stringify(req.body),  {
             "svix-id" : req.headers["svix-id"],
