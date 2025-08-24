@@ -59,115 +59,84 @@ export const clerkWebhooks = async (req, res)=>{
         res.json({success: false, message: error.message})
         
     }
-}
 
-//create a instance of the stripe payment 
+}
 
 const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhooks = async (req, res) => {
+    // Use the dedicated Webhook Signing Secret from your .env file
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
     const sig = req.headers['stripe-signature'];
     let event;
 
     try {
-        event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        // Verify the event came from Stripe using the correct secret
+        event = stripeInstance.webhooks.constructEvent(req.body, sig, endpointSecret);
     } catch (error) {
         console.error(`Webhook signature verification failed: ${error.message}`);
         return res.status(400).send(`Webhook Error: ${error.message}`);
     }
 
-    // Handle the event
-    switch (event.type) {
-        case 'payment_intent.succeeded': {
-            const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
+    // FIX 1: Listen for the 'checkout.session.completed' event.
+    // This is the recommended, more direct event for this workflow.
+    if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
 
-            // Use a try...catch block for all business logic
-            try {
-                const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntentId,
-                    expand: ['data.line_items'], // Optional: expand if you need more details
-                });
+        // Extract the metadata you passed when creating the session
+        const { userId, courseId } = session.metadata;
 
-                if (sessions.data.length === 0) {
-                    console.error(`No checkout session found for payment intent: ${paymentIntentId}`);
-                    // Return 200 to stop Stripe from retrying for this recoverable error
-                    return res.json({ received: true, message: "No session found." });
-                }
-
-                const { purchaseId } = sessions.data[0].metadata;
-
-                const purchaseData = await Purchase.findById(purchaseId);
-
-                // --- IDEMPOTENCY CHECK ---
-                // If the purchase is already completed, do nothing.
-                if (purchaseData && purchaseData.status === 'completed') {
-                    console.log(`Purchase ${purchaseId} already processed.`);
-                    return res.json({ received: true, message: "Already completed." });
-                }
-                
-                // Check if all necessary data exists
-                if (!purchaseData) {
-                    console.error(`Purchase with ID ${purchaseId} not found.`);
-                    return res.status(404).send('Purchase not found.');
-                }
-                
-                const userData = await User.findById(purchaseData.userId);
-                const courseData = await Course.findById(purchaseData.courseId);
-
-                if (!userData || !courseData) {
-                    console.error(`User or Course not found for Purchase ID ${purchaseId}.`);
-                    return res.status(404).send('User or Course not found.');
-                }
-
-                // --- CORRECTED MONGOOSE LOGIC ---
-                // Push the user's ID, not the whole user object
-                courseData.enrolledStudents.push(userData._id); 
-                userData.enrolledCourses.push(courseData._id);
-                purchaseData.status = 'completed';
-
-                // Save all changes
-                await courseData.save();
-                await userData.save();
-                await purchaseData.save();
-
-                console.log(`Successfully processed purchase ${purchaseId}.`);
-
-            } catch (error) {
-                console.error(`Error processing payment_intent.succeeded: ${error.message}`);
-                // Send a 500 error to let Stripe know something went wrong on our end
-                return res.status(500).send('Internal Server Error');
-            }
-            break;
+        if (!userId || !courseId) {
+            console.error("Webhook Error: Missing userId or courseId in metadata.");
+            // Acknowledge the event to prevent Stripe from retrying, but log the error.
+            return res.status(200).json({ received: true, message: "Missing metadata." });
         }
-        case 'payment_intent.payment_failed': {
-            // It's good practice to also wrap this in a try...catch
-            try {
-                const paymentIntent = event.data.object;
-                const paymentIntentId = paymentIntent.id;
 
-                const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntentId
-                });
-
-                if (sessions.data.length > 0) {
-                    const { purchaseId } = sessions.data[0].metadata;
-                    const purchaseData = await Purchase.findById(purchaseId);
-                    if (purchaseData) {
-                        purchaseData.status = 'failed';
-                        await purchaseData.save();
-                    }
-                }
-            } catch (error) {
-                 console.error(`Error processing payment_intent.payment_failed: ${error.message}`);
-                 return res.status(500).send('Internal Server Error');
+        try {
+            // FIX 2: The main logic is to CREATE the purchase and fulfill the order.
+            
+            // Step A: Check if this purchase has already been processed (idempotency)
+            const existingPurchase = await Purchase.findOne({ stripePaymentId: session.payment_intent });
+            if (existingPurchase) {
+                console.log(`Purchase for payment intent ${session.payment_intent} already processed.`);
+                return res.status(200).json({ received: true, message: "Already processed." });
             }
-            break;
+
+            // Step B: Create the purchase record in your database.
+            await Purchase.create({
+                userId,
+                courseId,
+                amount: session.amount_total / 100, // Amount from Stripe is in cents
+                stripePaymentId: session.payment_intent, // Store the payment intent ID
+                status: 'completed'
+            });
+
+            // Step C: Add the course ID to the user's enrolled courses.
+            await User.findByIdAndUpdate(userId, {
+                $push: { enrolledCourses: courseId }
+            });
+
+            // Step D: Add the user ID to the course's list of students.
+            await Course.findByIdAndUpdate(courseId, {
+                $push: { enrolledStudents: userId }
+            });
+
+            console.log(`✅ SUCCESS: Purchase fulfilled for User ID: ${userId}, Course ID: ${courseId}`);
+
+        } catch (dbError) {
+            console.error("❌ Database update failed after successful payment:", dbError);
+            // Let Stripe know there was an error on our end so it can retry.
+            return res.status(500).json({ error: "Database update failed." });
         }
-        default:
-            console.log(`Unhandled event type ${event.type}`);
+    } else {
+        // Handle other event types if necessary
+        console.log(`Unhandled event type ${event.type}`);
     }
 
-    // Send a 200 OK response to acknowledge receipt of the event
-    res.json({ received: true });
+    // Return a 200 response to acknowledge receipt of the event to Stripe
+    res.status(200).json({ received: true });
 };
+
+
+
+
