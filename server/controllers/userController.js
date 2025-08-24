@@ -41,6 +41,7 @@ export const purchaseCourse = async (req, res)=>{
     try {
         const { courseId } = req.body
         const userId = req.auth.userId
+        
         const origin = req.headers.origin; 
 
         const courseData = await Course.findById(courseId)

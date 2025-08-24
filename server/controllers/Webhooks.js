@@ -1,7 +1,7 @@
 import { Webhook } from 'svix'
 import User from '../models/User.js'
 import Stripe from 'stripe'
-import { request, response } from 'express'
+
 import Purchase from '../models/Purchase.js'
 import Course from '../models/Course.js'
 
@@ -67,15 +67,15 @@ const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 export const stripeWebhooks = async (req,  res)=>{
 
- const sig = request.headers[ 'stripe-signature'];
+ const sig = req.headers[ 'stripe-signature'];
 
  let event;
 
  try {
-    event = Stripe.webhooks.constructEvent(request.body, sig, process.env.STRIPE_SECRET_KEY)
+    event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_SECRET_KEY)
     
  } catch (error) {
-    response.status(400).send(`Webhook Error: ${error.message}`);
+    res.status(400).send(`Webhook Error: ${error.message}`);
     
  }
 
@@ -91,6 +91,7 @@ export const stripeWebhooks = async (req,  res)=>{
    })
 
    const { purchaseId } = session.data[0].metadata;
+
    const purchaseData = await Purchase.findById(purchaseId)
    const userData = await User.findById(purchaseData.userId)
    const courseData = await Course.findById(purchaseData.courseId.toString())
@@ -104,6 +105,7 @@ export const stripeWebhooks = async (req,  res)=>{
    await userData.save()
 
    purchaseData.status = 'completed'
+   
    await purchaseData.save()
 
             break;
