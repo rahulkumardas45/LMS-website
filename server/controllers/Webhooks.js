@@ -62,76 +62,104 @@ export const clerkWebhooks = async (req, res)=>{
 
 }
 
+
+
 const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhooks = async (req, res) => {
-    // Use the dedicated Webhook Signing Secret from your .env file
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    
     const sig = req.headers['stripe-signature'];
     let event;
 
     try {
-        // Verify the event came from Stripe using the correct secret
+        // req.body here is the raw body because of the express.raw() middleware
         event = Stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
     } catch (error) {
         console.error(`Webhook signature verification failed: ${error.message}`);
         return res.status(400).send(`Webhook Error: ${error.message}`);
     }
 
-    // handle the event
-
-switch (event.type) {
-     case 'payment_intent.succeeded': {
+    // Handle the event
+    switch (event.type) {
+        case 'payment_intent.succeeded': {
             const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id
+            const paymentIntentId = paymentIntent.id;
 
             const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId
-            })
+                payment_intent: paymentIntentId,
+                limit: 1 // We only need one
+            });
+
+            // ✅ SAFETY CHECK: Ensure a session was actually found
+            if (!session.data || session.data.length === 0) {
+                console.error(`No session found for payment intent: ${paymentIntentId}`);
+                return res.status(404).send('Session not found for the given payment intent.');
+            }
 
             const { PurchaseId } = session.data[0].metadata;
+            const purchaseData = await Purchase.findById(PurchaseId);
 
-            const purchaseData = await Purchase.findById(PurchaseId)
-            const userData = await User.findById(purchaseData.userId)
-            const courseData = await Course.findById(purchaseData.courseId.toString())
+            // ✅ IDEMPOTENCY CHECK: Prevent processing the same successful order twice
+            if (purchaseData.status === 'completed') {
+                console.log(`Purchase ${PurchaseId} has already been processed.`);
+                return res.status(200).json({ received: true });
+            }
 
-            courseData.enrolledStudents.push(userData._id)
-            await courseData.save()
+            const userData = await User.findById(purchaseData.userId);
+            const courseData = await Course.findById(purchaseData.courseId.toString());
 
-            userData.enrolledCourses.push(courseData._id)
-            await userData.save()
+            courseData.enrolledStudents.push(userData._id);
+            await courseData.save();
 
-            purchaseData.status ='completed'
+            userData.enrolledCourses.push(courseData._id);
+            await userData.save();
+
+            purchaseData.status = 'completed';
             await purchaseData.save();
-         
-             break;
+
+            break;
         }
-     case 'payment_intent.payment_failed': {
+        case 'payment_intent.payment_failed': {
             const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id
+            const paymentIntentId = paymentIntent.id;
 
             const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId
-            })
+                payment_intent: paymentIntentId,
+                limit: 1
+            });
+
+            // ✅ SAFETY CHECK: Ensure a session was actually found
+            if (!session.data || session.data.length === 0) {
+                console.error(`No session found for payment intent: ${paymentIntentId}`);
+                return res.status(404).send('Session not found for the given payment intent.');
+            }
 
             const { PurchaseId } = session.data[0].metadata;
-         
-            const purchaseData = await Purchase.findById(PurchaseId)
-            purchaseData.status = 'failed'
+            const purchaseData = await Purchase.findById(PurchaseId);
 
+            // ✅ IDEMPOTENCY CHECK: You can also add one here for failed payments
+            if (purchaseData.status === 'failed') {
+                console.log(`Purchase ${PurchaseId} is already marked as failed.`);
+                return res.status(200).json({ received: true });
+            }
+
+            purchaseData.status = 'failed';
             await purchaseData.save();
-           
-             break;
-        }
 
+            break;
+        }
         default:
-             console.log(`Unhandled event type ${event.type}`);
+            console.log(`Unhandled event type ${event.type}`);
     }
 
-    res.json({received: true});
+    res.status(200).json({ received: true });
+};
 
-}
+
+
+
+
+
 
 
 
