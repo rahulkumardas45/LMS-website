@@ -40,8 +40,8 @@ export const userEnrolledCourses = async( req, res) =>{
 export const purchaseCourse = async (req, res)=>{
     try {
         const { courseId } = req.body
-        const userId = req.auth().userId
-        const origin = req.headers.origin
+        const { origin } = req.headers
+        const userId = req.auth.userId
 
         const courseData = await Course.findById(courseId)
         const userData = await User.findById( userId )
@@ -73,7 +73,7 @@ export const purchaseCourse = async (req, res)=>{
             product_data: {
                 name: courseData.courseTitle
             },
-            unit_amount: Math.floor(newPurchase.amount)*100
+            unit_amount: Math.floor(newPurchase.amount) * 100
         },
         quantity: 1
 
