@@ -84,7 +84,7 @@ export const stripeWebhooks = async (req, res) => {
 switch (event.type) {
      case 'payment_intent.succeeded': {
             const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent._id
+            const paymentIntentId = paymentIntent.id
 
             const session = await stripeInstance.checkout.sessions.list({
                 payment_intent: paymentIntentId
@@ -109,7 +109,7 @@ switch (event.type) {
         }
      case 'payment_intent.payment_failed': {
             const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent._id
+            const paymentIntentId = paymentIntent.id
 
             const session = await stripeInstance.checkout.sessions.list({
                 payment_intent: paymentIntentId
