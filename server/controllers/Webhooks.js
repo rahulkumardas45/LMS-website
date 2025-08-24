@@ -67,12 +67,12 @@ const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 export const stripeWebhooks = async (req,  res)=>{
 
- const sig = req.headers[ 'stripe-signature'];
+ const sig = req.headers['stripe-signature'];
 
  let event;
 
  try {
-    event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_SECRET_KEY)
+    event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET)
     
  } catch (error) {
     res.status(400).send(`Webhook Error: ${error.message}`);
@@ -82,7 +82,7 @@ export const stripeWebhooks = async (req,  res)=>{
  // handle the event 
 
  switch (event.type) {
-        case 'payment_intent.succeeded': {
+ case 'payment_intent.succeeded': {
             const paymentIntent = event.data.object;
             const paymentIntentId = paymentIntent.id;
 
@@ -110,7 +110,7 @@ export const stripeWebhooks = async (req,  res)=>{
 
             break;
         }
-        case 'payment_intent.payment_failed': {
+ case 'payment_intent.payment_failed': {
              const paymentIntent = event.data.object;
             const paymentIntentId = paymentIntent.id;
 
@@ -127,7 +127,7 @@ export const stripeWebhooks = async (req,  res)=>{
             break;
         }
         // ... handle other event types
-        default:
+ default:
             console.log(`Unhandled event type ${event.type}`);
     }
      res.json({ received: true });
