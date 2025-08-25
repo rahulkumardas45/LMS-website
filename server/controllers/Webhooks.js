@@ -1,7 +1,6 @@
 import { Webhook } from 'svix'
-import User from '../models/User.js'
 import Stripe from 'stripe'
-
+import User from '../models/User.js'
 import Purchase from '../models/Purchase.js'
 import Course from '../models/Course.js'
 
@@ -63,7 +62,6 @@ export const clerkWebhooks = async (req, res)=>{
 }
 
 
-
 const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhooks = async (req, res) => {
@@ -72,97 +70,112 @@ export const stripeWebhooks = async (req, res) => {
     let event;
 
     try {
-        // req.body here is the raw body because of the express.raw() middleware
-        event = Stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+        event = stripeInstance.webhooks.constructEvent(req.body, sig, endpointSecret);
     } catch (error) {
         console.error(`Webhook signature verification failed: ${error.message}`);
         return res.status(400).send(`Webhook Error: ${error.message}`);
     }
 
-    // Handle the event
-    switch (event.type) {
-        case 'payment_intent.succeeded': {
-            const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
+    try {
+        switch (event.type) {
+            case 'payment_intent.succeeded': {
+                const paymentIntent = event.data.object;
+                const paymentIntentId = paymentIntent.id;
 
-            const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId,
-                limit: 1 // We only need one
-            });
+                const session = await stripeInstance.checkout.sessions.list({
+                    payment_intent: paymentIntentId,
+                    limit: 1,
+                });
 
-            // ✅ SAFETY CHECK: Ensure a session was actually found
-            if (!session.data || session.data.length === 0) {
-                console.error(`No session found for payment intent: ${paymentIntentId}`);
-                return res.status(404).send('Session not found for the given payment intent.');
+                if (!session.data || session.data.length === 0) {
+                    console.error(`No session found for payment intent: ${paymentIntentId}`);
+                    return res.status(404).send('Session not found for the given payment intent.');
+                }
+
+                const { purchaseId } = session.data[0].metadata; // fixed key name
+                const purchaseData = await Purchase.findById(purchaseId);
+
+                if (!purchaseData) {
+                    console.error(`Purchase not found with ID: ${purchaseId}`);
+                    return res.status(404).send('Purchase not found.');
+                }
+
+                if (purchaseData.status === 'completed') {
+                    console.log(`Purchase ${purchaseId} already processed.`);
+                    return res.status(200).json({ received: true });
+                }
+
+                const userData = await User.findById(purchaseData.userId);
+                const courseData = await Course.findById(purchaseData.courseId);
+
+                if (!userData || !courseData) {
+                    console.error(`User or Course not found for Purchase ID: ${purchaseId}`);
+                    return res.status(404).send('User or Course not found.');
+                }
+
+                // Enroll the user
+                if (!courseData.enrolledStudents.includes(userData._id)) {
+                    courseData.enrolledStudents.push(userData._id);
+                    await courseData.save();
+                }
+
+                if (!userData.enrolledCourses.includes(courseData._id)) {
+                    userData.enrolledCourses.push(courseData._id);
+                    await userData.save();
+                }
+
+                // Mark purchase as completed
+                purchaseData.status = 'completed';
+                await purchaseData.save();
+
+                console.log(`Purchase ${purchaseId} marked as completed.`);
+                break;
             }
 
-            const { PurchaseId } = session.data[0].metadata;
-            const purchaseData = await Purchase.findById(PurchaseId);
+            case 'payment_intent.payment_failed': {
+                const paymentIntent = event.data.object;
+                const paymentIntentId = paymentIntent.id;
 
-            // ✅ IDEMPOTENCY CHECK: Prevent processing the same successful order twice
-            if (purchaseData.status === 'completed') {
-                console.log(`Purchase ${PurchaseId} has already been processed.`);
-                return res.status(200).json({ received: true });
+                const session = await stripeInstance.checkout.sessions.list({
+                    payment_intent: paymentIntentId,
+                    limit: 1,
+                });
+
+                if (!session.data || session.data.length === 0) {
+                    console.error(`No session found for payment intent: ${paymentIntentId}`);
+                    return res.status(404).send('Session not found for the given payment intent.');
+                }
+
+                const { purchaseId } = session.data[0].metadata; // fixed key name
+                const purchaseData = await Purchase.findById(purchaseId);
+
+                if (!purchaseData) {
+                    console.error(`Purchase not found with ID: ${purchaseId}`);
+                    return res.status(404).send('Purchase not found.');
+                }
+
+                if (purchaseData.status === 'failed') {
+                    console.log(`Purchase ${purchaseId} is already marked as failed.`);
+                    return res.status(200).json({ received: true });
+                }
+
+                purchaseData.status = 'failed';
+                await purchaseData.save();
+
+                console.log(`Purchase ${purchaseId} marked as failed.`);
+                break;
             }
 
-            const userData = await User.findById(purchaseData.userId);
-            const courseData = await Course.findById(purchaseData.courseId.toString());
-
-            courseData.enrolledStudents.push(userData._id);
-            await courseData.save();
-
-            userData.enrolledCourses.push(courseData._id);
-            await userData.save();
-
-            purchaseData.status = 'completed';
-            await purchaseData.save();
-
-            break;
+            default:
+                console.log(`Unhandled event type ${event.type}`);
         }
-        case 'payment_intent.payment_failed': {
-            const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
 
-            const session = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntentId,
-                limit: 1
-            });
-
-            // ✅ SAFETY CHECK: Ensure a session was actually found
-            if (!session.data || session.data.length === 0) {
-                console.error(`No session found for payment intent: ${paymentIntentId}`);
-                return res.status(404).send('Session not found for the given payment intent.');
-            }
-
-            const { PurchaseId } = session.data[0].metadata;
-            const purchaseData = await Purchase.findById(PurchaseId);
-
-            // ✅ IDEMPOTENCY CHECK: You can also add one here for failed payments
-            if (purchaseData.status === 'failed') {
-                console.log(`Purchase ${PurchaseId} is already marked as failed.`);
-                return res.status(200).json({ received: true });
-            }
-
-            purchaseData.status = 'failed';
-            await purchaseData.save();
-
-            break;
-        }
-        default:
-            console.log(`Unhandled event type ${event.type}`);
+        res.status(200).json({ received: true });
+    } catch (error) {
+        console.error(`Error processing webhook: ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    res.status(200).json({ received: true });
 };
-
-
-
-
-
-
-
-
-
 
 
 
