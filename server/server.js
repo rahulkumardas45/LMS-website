@@ -24,9 +24,9 @@ app.use(clerkMiddleware())
 //routtes
 app.get('/', (req,res)=> res.send('hello server is runing'))
 app.post('/clerk', express.json(), clerkWebhooks);
-app.post('/stripe', express.raw({ type: 'application/json' }), stripeWebhooks);
 app.use('/api/educator', express.json(), educatorRouter)
 app.use('/api/course', express.json(), courseRouter)
+app.post('/stripe', express.raw({ type: 'application/json' }), stripeWebhooks);
 app.use('/api/user', express.json(), userRouter)
 
 

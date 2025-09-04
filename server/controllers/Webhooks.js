@@ -17,9 +17,9 @@ export const clerkWebhooks = async (req, res)=>{
             "svix-signature": req.headers["svix-signature"]
         })
 
-    const {data, type } = req.body
+    const { data, type } = req.body
 
-        switch (type) {
+    switch (type) {
              case 'user.created' : {
                  const userData = {
                     _id: data.id,
@@ -28,7 +28,7 @@ export const clerkWebhooks = async (req, res)=>{
                     imageUrl: data.image_url,
                  }
                  await User.create(userData)
-                 res.json({message: "user created succesfully"})
+                 res.json({success: true , message: "user created succesfully"})
                  break;
              }
              case 'user.updated' : {

@@ -7,6 +7,9 @@ import CourseCard from '../../components/student/CourseCard';
 import humanizeDuration from 'humanize-duration';
 import Footer from '../../components/student/Footer';
 import YouTube from 'react-youtube';
+import axios from 'axios';
+import { toast } from 'react-toastify';
+
 
 const CourseDetail = () => {
 
@@ -19,13 +22,53 @@ const CourseDetail = () => {
 
   const {allCourses,calculateRating,calculateChapterTime,
       calculateCourseDuration,
-      calculateTotalLecture,currency  } = useContext(AppContext)
+      calculateTotalLecture,currency , backendUrl, userData , getToken } = useContext(AppContext)
 
   const fetchCourseData = async () => {
-    const findCourse = allCourses.find(course => course._id === id);
-    setCourseData(findCourse);
+      try {
+        const { data } = await axios.get(backendUrl + '/api/course/' + id)
+       if(data.success){
+          setCourseData(data.courseData)
+       }else{
+        toast.error(data.message)
+       }
+
+      } catch (error) {
+        toast.error(error.message)
+      }
 
   }
+
+
+  const enrollCourse = async ()=>{
+    try {
+      if(!userData){
+        return toast.warn('Login to Enroll')
+      }
+
+      if(isAlreadyEnroll){
+        return toast.warn('Already Enrolled')
+      }
+      
+      const token = await getToken();
+
+      const { data } = await axios.post(backendUrl + '/api/user/purchase', { courseId: courseData._id}, {headers: {Authorization : `Bearer ${token}`} })
+      
+      if(data.success){
+        const { session_url } = data
+        window.location.replace(session_url)
+      }else{
+        toast.error(data.message)
+      }
+
+    } catch (error) {
+      toast.error(error.message)
+      
+    }
+       
+
+  }
+
 
   const toggleSection = (index)=>{
     setOpenSection((prev)=> ({
@@ -36,7 +79,13 @@ const CourseDetail = () => {
 
   useEffect(()=>{
     fetchCourseData()
-  },[courseData, allCourses])
+  },[])
+
+  useEffect(()=>{
+     if( userData && courseData){
+      setIsAlreadyEnroll(userData.enrolledCourses.includes(courseData._id))
+     }
+  },[ userData, courseData])
 
 
   return courseData ? (
@@ -63,7 +112,7 @@ const CourseDetail = () => {
             )
             <p> {courseData.enrolledStudents.length} {courseData.enrolledStudents.length >1 ? 'students' : 'student'}</p>
           </div>
-    <p className='text-sm'>Course by <span className='text-blue-600 underline'>GreatStack</span></p>
+    <p className='text-sm'>Course by <span className='text-blue-600 underline'>{courseData.educatorName}</span></p>
 
     <div className='pt-8 text-gray-800'>
       <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -71,7 +120,7 @@ const CourseDetail = () => {
       </h2>
 
       <div className='pt-5 '>
-        {courseData.courseContent.map((chapter, index)=>
+        {courseData.courseContent?.map((chapter, index)=>
           <div key={index} className='border border-gray-300 bg-white mb-2 rounded'>
             <div className='flex items-center justify-between  px-4 py-3  cursor-pointer select-none ' onClick={()=>toggleSection(index)}>
               <div className='flex items-center gap-2'>
@@ -79,14 +128,14 @@ const CourseDetail = () => {
                 <p className='font-medium md:text-base text-sm'>{chapter.chapterTitle}</p>
               </div>
               <p className='text-sm md:text-default'>
-                {chapter.chapterContent.length} lectures -{calculateChapterTime(chapter)}
+                {chapter.chapterContent.length} lectures - {calculateChapterTime(chapter)}
               </p>
 
             </div>
             {/* //for the lecture */}
             <div className={`overflow-hidden transition-all duration-300  ${openSection[index] ? 'max-h-96' :'max-h-0'}`}>
               <ul className='list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300'>
-                {chapter.chapterContent.map((lecture, i)=>
+                {chapter.chapterContent?.map((lecture, i)=>
                 <li key={i} className='flex items-start gap-2 py-1'>
                  <img src={assets.play_icon} alt="play_icon" className='w-4 h-4 mt-1' />
                  <div className='flex items-center justify-between w-full text-gray-800 text-xs md:text-default'>
@@ -176,7 +225,7 @@ const CourseDetail = () => {
         </div>
         
         {/* Enroll Button */}
-        <button className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 mt-5 transition duration-300 mb-6">
+        <button className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 mt-5 transition duration-300 mb-6 cursor-pointer"  onClick = {enrollCourse}> 
          { isAlreadyEnroll ? ' AlreadyEnroll Now' : 'Enroll Now'} 
         </button>
         

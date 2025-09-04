@@ -1,10 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import uniqid from'uniqid'
 import Quill from 'quill'
 import { assets } from '../../assets/assets';
+import { AppContext } from '../../context/AppContext';
+import { toast } from 'react-toastify';
+import axios from 'axios';
 
 
 const AddCourse = () => {
+
+ const { backendUrl, getToken } = useContext(AppContext)
  const quillRef = useRef(null);
  const editorRef =  useRef(null);
 
@@ -26,7 +31,7 @@ const [lectureDetails, setLectureDetails] = useState(
 )
 
 const handleChapter = (action, chapterId) =>{
-    if(action == 'add'){
+    if(action === 'add'){
       const title = prompt('Enter Chapter Name:');
       if(title){
         const newChapter = {
@@ -55,51 +60,103 @@ const handleChapter = (action, chapterId) =>{
 
 
 const handleLecture = (action, chapterId, lectureIndex) =>{
-    if(action === 'add'){
-       setCurrentChapterId(chapterId);
-       setShowPopup(true);
+  if(action === 'add'){
+    setCurrentChapterId(chapterId);
+    setShowPopup(true);
 
-    }else if(action === 'remove') {
-      setChapters(
-        chapters.map((chapter)=> {
-      if(chapter.chapterId === chapterId){
-        chapter.chapterContent.splice(lectureIndex, 1);
-      }
-      return chapter;
-        })
+  }else if(action === 'remove') {
+    setChapters(
+      chapters.map((chapter) => 
+        chapter.chapterId === chapterId
+          ? {
+              ...chapter,
+              chapterContent: chapter.chapterContent.filter((_, i) => i !== lectureIndex)
+            }
+          : chapter
       )
-    }
+    );
+  }
 }
 
 const addLecture = ()=> {
-   setChapters(
+  setChapters(
     chapters.map((chapter) => {
-   if(chapter.chapterId === currentChapterId){
-    const newLecture = {
-      ...lectureDetails,
-      lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder +1 : 1,
-      lectureId: uniqid()
-    };
-    chapter.chapterContent.push(newLecture)
-   }
-   return chapter;
+      if(chapter.chapterId === currentChapterId){
+        const newLecture = {
+          ...lectureDetails,
+          lectureOrder: chapter.chapterContent.length > 0 
+            ? chapter.chapterContent[chapter.chapterContent.length - 1].lectureOrder + 1 
+            : 1,
+          lectureId: uniqid()
+        };
+        return {
+          ...chapter,
+          chapterContent: [...chapter.chapterContent, newLecture]
+        }
+      }
+      return chapter;
     })
-   );
-   setShowPopup(false);
-   setLectureDetails({
-     lectureTitle: '',
-     lectureDuration: '',
-     lectureUrl: '',
-     isPreviewFree: false
-   })
+  );
+
+  setShowPopup(false);
+  setLectureDetails({
+    lectureTitle: '',
+    lectureDuration: '',
+    lectureUrl: '',
+    isPreviewFree: false
+  })
 }
+
 
 
 //form handiling
 
-const handleSubmit = async (e) =>{
-  e.preventDefault()
-}
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  try {
+    if (!image) {
+      return toast.error('Thumbnail Not Selected');
+    }
+
+    const courseData = {
+      courseTitle,
+      courseDescription: quillRef.current.root.innerHTML,
+      coursePrice: Number(coursePrice),
+      discount: Number(discount),
+      courseContent: chapters,
+    };
+
+    const formData = new FormData();
+    formData.append('courseData', JSON.stringify(courseData));
+    formData.append('image', image);
+
+    const token = await getToken();
+    const {data} = await axios.post(
+      backendUrl + '/api/educator/add-course',
+      formData,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (data.success) {
+      toast.success(data.message);
+      setCourseTitle('');
+      setCoursePrice(0);
+      setDiscount(0);
+      setImage(null);
+      setChapters([]);
+      quillRef.current.root.innerHTML = '';
+      toast.success(data.message);
+    } else {
+      toast.error(data.message);
+    }
+  } catch (error) {
+    toast.error(error.message);
+  }
+};
+
+
+
  useEffect(() => {
   if (!quillRef.current && editorRef.current) {
     quillRef.current = new Quill(editorRef.current, {
@@ -110,7 +167,7 @@ const handleSubmit = async (e) =>{
 
   return (
   <div className='h-screen overflow-scroll flex flex-col items-start justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0'>
-    <form onSubmit={ ()=>handleSubmit() } className='flex flex-col gap-4 max-w-md w-full text-gray-500'>
+    <form onSubmit={handleSubmit } className='flex flex-col gap-4 max-w-md w-full text-gray-500'>
         <div className='flex flex-col gap-1'>
             <p>Course Title</p>
             <input 
@@ -155,7 +212,7 @@ const handleSubmit = async (e) =>{
         
         <img 
             className='max-h-10' 
-            src={image ? URL.createObjectURL(image) : ''} 
+            src={image ? URL.createObjectURL(image) : null} 
             alt="" 
         />
     </label>

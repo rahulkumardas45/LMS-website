@@ -3,6 +3,8 @@ import React, { useContext, useState } from 'react';
 import { assets } from '../../assets/assets';
 import { useClerk,UserButton,useUser } from '@clerk/clerk-react';
 import { AppContext } from '../../context/AppContext';
+import axios from 'axios';
+import { toast } from 'react-toastify';
 // import { useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
@@ -10,11 +12,35 @@ const Navbar = () => {
   // Function to handle the logo click
   const isCourseListPage = location.pathname.includes('/course-list');
  const [isMenuOpen, setMenuOpen] = useState(false);
-   const {navigate,isEducator} = useContext(AppContext)
+   const {navigate,isEducator, backendUrl, setIsEducator, getToken } = useContext(AppContext)
   // const navigate = useNavigate();
 
   const {openSignIn} = useClerk();
   const {user} = useUser();
+
+  const becomeEducator = async()=>{
+       try {
+          if(isEducator){
+            navigate('/educator')
+            return;
+          }
+
+          const token = await getToken();
+          const { data } = await axios.get(backendUrl + '/api/educator/update-role', {headers: {Authorization: `Bearer ${token}`}})
+
+          if(data.success){
+            setIsEducator(true)
+            toast.success(data.message)
+
+          }else{
+            toast.error(data.message)
+          }
+
+       } catch (error) {
+         toast.error(error.message)
+        
+       }
+  }
 
   return (
     <header className={`relative flex items-center justify-between bg-[#eaf8ff] py-3 px-10 font-sans border-b border-gray-200 ${isCourseListPage ? 'bg-white' : 'bg-[#eaf8ff]'}`}>
@@ -33,9 +59,7 @@ const Navbar = () => {
               <a 
                 href="#courses" 
                 className="text-base font-medium text-gray-600 no-underline transition-colors duration-200 hover:text-blue-600"
-                onClick={()=>{
-                  navigate('/educator')
-                }}
+                onClick={becomeEducator}
               >
                { isEducator ? 'Educator Dashboard' : 'Become Educator'} 
               </a>
@@ -85,9 +109,7 @@ const Navbar = () => {
              <a 
                 href="#courses" 
                 className="text-base font-medium text-gray-600 no-underline transition-colors duration-200 hover:text-blue-600"
-                onClick={()=>{
-                  navigate('/educator')
-                }}
+                onClick={becomeEducator}
               >
                { isEducator ? 'Educator Dashboard' : 'Become Educator'} 
               </a>
