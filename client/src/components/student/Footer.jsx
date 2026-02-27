@@ -52,7 +52,7 @@ const Footer = () => {
 
         {/* Bottom Copyright Section */}
         <div className="border-t border-gray-700 mt-12 pt-6 text-center">
-          <p>Copyright 2024 © Edemy. All Right Reserved.</p>
+          <p>Copyright 2026 © Edemy. All Right Reserved.</p>
         </div>
         
       </div>
