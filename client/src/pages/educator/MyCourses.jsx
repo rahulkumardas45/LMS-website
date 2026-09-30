@@ -52,8 +52,8 @@ useEffect(()=>{
 
           {/* Table Body */}
           <div className="divide-y divide-gray-200">
-            {courses.map((course) => (
-              <div key={course.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 py-4 hover:bg-gray-50 transition-colors">
+            {courses.map((course, index) => (
+              <div key={course._id || index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 py-4 hover:bg-gray-50 transition-colors">
                 
                 {/* Course Title and Image */}
                 <div className="col-span-1 md:col-span-6 flex items-center gap-4">
@@ -68,7 +68,7 @@ useEffect(()=>{
                   <span className="md:hidden font-semibold text-gray-600">Earnings: </span>
                   <span className="text-gray-700">{currency}
   {Math.floor(
-    course.enrolledStudents.length *
+    (course.enrolledStudents?.length || 0) *
       (course.coursePrice - (course.discount * course.coursePrice) / 100)
   )}</span>
                 </div>
@@ -76,7 +76,7 @@ useEffect(()=>{
   {/* Students */}
                 <div className="col-span-1 md:col-span-2 text-left md:text-center">
                    <span className="md:hidden font-semibold text-gray-600">Students: </span>
-                   <span className="text-gray-700">{course.enrolledStudents.length}</span>
+                   <span className="text-gray-700">{course.enrolledStudents?.length || 0}</span>
                 </div>
 
 

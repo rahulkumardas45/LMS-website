@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { data, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { assets } from '../../assets/assets'
 
 const SearchBar = ({data}) => {
@@ -8,11 +8,15 @@ const SearchBar = ({data}) => {
 
   const handleSearch = (e) => {
     e.preventDefault()
-    navigate('/course-list/'+ input)
+    if (input.trim()) {
+      navigate('/course-list/' + encodeURIComponent(input.trim()))
+    } else {
+      navigate('/course-list')
+    }
   }
 
   return (
-     <div onSubmit={handleSearch} className="w-full max-w-xl mx-auto px-4 sm:px-0">
+     <form onSubmit={handleSearch} className="w-full max-w-xl mx-auto px-4 sm:px-0">
       <div className="flex items-center w-full bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
         
         {/* Search Icon */}
@@ -33,7 +37,7 @@ const SearchBar = ({data}) => {
         </button>
         
       </div>
-    </div>
+    </form>
   )
 }
 

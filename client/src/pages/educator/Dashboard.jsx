@@ -76,20 +76,20 @@ const Dashboard = () => {
             </thead>
             <tbody>
               {dashboardData.enrolledStudentsData.map((item, index) => (
-                <tr key={item.id} className="border-b hover:bg-gray-50">
+                <tr key={index} className="border-b hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-600">{index + 1}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <img
-                        src={item.student.imageUrl}
-                        alt={item.student.name}
+                        src={item.student?.imageUrl || assets.profile_img}
+                        alt={item.student?.name || 'Student'}
                         className="w-8 h-8 rounded-full object-cover"
                       />
-                      <span className="font-medium text-gray-800">{item.student.name}</span>
+                      <span className="font-medium text-gray-800">{item.student?.name || 'Student'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-700">{item.courseTitle}</td>
-                  <td className="px-6 py-4 text-gray-700">{item.date}</td>
+                  <td className="px-6 py-4 text-gray-700">{item.date || 'N/A'}</td>
                 </tr>
               ))}
             </tbody>

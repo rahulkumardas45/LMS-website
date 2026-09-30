@@ -24,17 +24,20 @@ const Player = () => {
    const {courseId} = useParams()
 
   const getCourseData = async () => {
-    enrolledCourses.map((course) => {  if(course._id ===  courseId){
-   setCourseData(course);
+    enrolledCourses.forEach((course) => {
+      if ((course._id || course).toString() === courseId?.toString()) {
+        setCourseData(course);
 
-   course.courseRatings.map((item)=>{
-    if(item.userId === userData._id){
-      setInitialRating(item.rating)
-    }
-   })
-    }
-  })
-}
+        if (course.courseRatings && userData) {
+          course.courseRatings.forEach((item) => {
+            if (item.userId === userData._id) {
+              setInitialRating(item.rating);
+            }
+          });
+        }
+      }
+    });
+  };
 
   const toggleSection = (index)=>{
     setOpenSection((prev)=> ({
@@ -140,7 +143,7 @@ const Player = () => {
                   <ul className='list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300'>
                     {chapter.chapterContent.map((lecture, i)=>
                     <li key={i} className='flex items-start gap-2 py-1'>
-                     <img src={progressData && progressData.lectureCompleted.includes(lecture.lectureId) ? assets.blue_tick_icon : assets.play_icon} alt="play_icon" className='w-4 h-4 mt-1' />
+                     <img src={progressData?.lectureCompleted?.includes(lecture.lectureId) ? assets.blue_tick_icon : assets.play_icon} alt="play_icon" className='w-4 h-4 mt-1' />
                      <div className='flex items-center justify-between w-full text-gray-800 text-xs md:text-default'>
                       <p>{lecture.lectureTitle}</p>
                       <div className='flex gap-2'>
@@ -178,7 +181,7 @@ const Player = () => {
       <YouTube videoId={playData.lectureUrl.split('/').pop()}  iframeClassName='w-full aspect-video' />
       <div className='flex justify-between items-center mt-1'>
         <p>{playData.chapter}.{playData.lecture} {playData.lectureTitle}</p>
-        <button  onClick = {()=> markLectureAsCompleted(playData.lectureId)}  className='text-blue-600'>{progressData && progressData.lectureCompleted.includes(playData.lectureId)? 'Completed': 'Mark Complete'}</button>
+        <button onClick={() => markLectureAsCompleted(playData.lectureId)} className='text-blue-600 cursor-pointer'>{progressData?.lectureCompleted?.includes(playData.lectureId) ? 'Completed' : 'Mark Complete'}</button>
       </div>
   </div>
  ):
